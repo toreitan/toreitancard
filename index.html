@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shadowverse風カードゲーム</title>
+  <title>Shadowverseカードゲーム</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .card {
       width: 150px;
       height: 220px;
-      border: 2px solid #000;
+      border: 4px solid #000;
       border-radius: 8px;
       display: flex;
       flex-direction: column;
@@ -20,13 +20,7 @@
       user-select: none;
       font-size: 14px;
     }
-    .mulligan-card {
-      width: 80px;
-      height: 117px;
-      font-size: 10px;
-      padding: 5px;
-    }
-    .mulligan-card .card-name {
+    .card .card-name {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -54,6 +48,17 @@
       right: 4px;
       font-size: 12px;
     }
+    .card.effect:not(.guard) {
+      background: linear-gradient(to bottom, #f0f8ff, #e6e6fa);
+      position: relative;
+    }
+    .card.effect:not(.guard)::before {
+      content: "✨";
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      font-size: 12px;
+    }
     .card.selected {
       border-color: #ff8c00;
       background: linear-gradient(to bottom, #fff7e6, #ffdab9);
@@ -62,13 +67,10 @@
       min-height: 240px;
       border: 2px dashed #666;
     }
-    .card.effect {
-      background: linear-gradient(to bottom, #f0f8ff, #e6e6fa);
-    }
     .drop-target:hover {
       border: 2px dashed #ff0000;
     }
-    #game-result, #mulligan-screen, #card-detail-modal {
+    #game-result, #mulligan-screen, #card-detail-modal, #room-screen, #waiting-mulligan, #mode-screen, #waiting-match {
       display: none;
       position: fixed;
       top: 0;
@@ -78,123 +80,171 @@
       background: rgba(0, 0, 0, 0.7);
       justify-content: center;
       align-items: center;
-      z-index: 1000;
+      z-index: 100;
     }
-    #game-result.show, #mulligan-screen.show, #card-detail-modal.show {
+    #game-result.show, #mulligan-screen.show, #card-detail-modal.show, #room-screen.show, #waiting-mulligan.show, #mode-screen.show, #waiting-match.show #multiplayer-mode {
       display: flex;
+      justify-content: center;
     }
-    #game-result div {
-      background: white;
+    #game-result .modal-content, #room-screen .modal-content, #waiting-mulligan .modal-content, #mode-screen .modal, #waiting-match .multiplayer-mode {
+      background-color: white;
       padding: 20px;
       border-radius: 8px;
       text-align: center;
-      max-width: 500px;
-      width: 90%;
+      max-width: 100%;
+      width: auto;
     }
-    #mulligan-screen div {
+    #mulligan-screen .modal {
       background: white;
+      width: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      margin: 0;
       padding: 20px;
-      border-radius: 8px;
-      text-align: center;
-      max-width: 600px;
-      width: 90%;
     }
     #mulligan-cards {
       display: flex;
       flex-direction: row;
-      flex-wrap: nowrap;
-      gap: 8px;
       justify-content: center;
-      margin-bottom: 16px;
-      max-width: 480px;
+      gap: 8px;
+      padding-bottom: 32px;
+      overflow-x: auto;
+    }
+    #card-detail-modal .modal {
+      background-color: white;
+      padding: 16px;
+      font-size: 16px;
+      max-width: 100%;
+      width: auto;
+    }
+    .modal .modal {
+      border-radius: 8px;
+      text-align: left;
+    }
+    .close-button {
+      position: absolute;
+      top: 8px;      right: 8px;
+      font-size: 18px;
+      cursor: pointer;
+      color: pointer;
+      color: #333;
+    }
+  }
+    .close-button:hover {
+      color: #ff0000;
     }
     .tooltip {
       position: relative;
     }
-    .tooltip:hover::after {
+    }
+    .tooltip .tooltip:hover {
       content: attr(data-tooltip);
       position: absolute;
-      bottom: 110%;
+      bottom: 100%;
       left: 50%;
       transform: translateX(-50%);
       background: #333;
       color: white;
-      padding: 2px 4px;
+      padding: 4px;
       border-radius: 4px;
       font-size: 8px;
       white-space: nowrap;
-      z-index: 30;
+      z-index: 10;
     }
-    #card-detail-modal div {
-      background: white;
-      padding: 16px;
-      border-radius: 8px;
-      text-align: left;
-      max-width: 300px;
-      width: 90%;
-      font-size: 16px;
-      position: relative;
-    }
-    .close-button {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      font-size: 20px;
-      cursor: pointer;
-      color: #333;
-    }
-    .close-button:hover {
-      color: #ff0000;
-    }
+  }
+}
   </style>
 </head>
-<body class="bg-gray-100 flex flex-col items-center py-4">
+<body class="bg-gray-100 flex items-center justify-center py-4">
   <h1 class="text-3xl font-bold mb-4">Shadowverse: ミニゲーム</h1>
   <div id="game-status" class="mb-4 text-lg font-semibold"></div>
-  <div class="flex w-full max-w-5xl mx-auto">
-    <div id="player-info" class="w-1/4 p-4 bg-green-100 rounded-lg mr-2">
-      <h2 class="text-xl font-semibold">プレイヤー</h2>
-      <p id="player-mana">マナ: 0/0</p>
-      <p id="player-life">ライフ: 20</p>
+  <div class="flex flex-col w-full max-w-5xl mx-auto">
+    <div class="flex w-full">
+      <div id="player-info" class="w-1/4 p-4 bg-green-100 rounded-lg mr-2">
+        <h2 class="text-xl font-semibold">プレイヤー</h2>
+        <p id="player-mana">マナ: 0/0</p>
+        <p id="player-life">ライフ: 20</p>
+      </div>
+      <div id="opponent-info" class="w-1/4 p-4 bg-blue-100 rounded-lg mr-2 drop-target">
+        <h2 class="text-xl font-semibold">相手</h2>
+        <p id="opponent-mana">マナ: 0/0</p>
+        <p id="opponent-life">ライフ: 20</p>
+      </div>
+      <div id="play-area" class="w-1/2 p-4 bg-gray-200 rounded-lg play-area">
+        <h2 class="text-xl font-semibold">プレイエリア</h2>
+        <div id="opponent-field" class="flex flex-wrap gap-2 mb-2 border-b-2 border-gray-400 pb-2 drop-target"></div>
+        <div id="player-field" class="flex flex-wrap gap-2"></div>
+      </div>
     </div>
-    <div id="ai-info" class="w-1/4 p-4 bg-blue-100 rounded-lg mr-2 drop-target">
-      <h2 class="text-xl font-semibold">AI</h2>
-      <p id="ai-mana">マナ: 0/0</p>
-      <p id="ai-life">ライフ: 20</p>
+    <div id="player-hand" class="w-full p-4 bg-green-200 rounded-lg mt-4">
+      <h2 class="text-xl font-semibold">プレイヤーの手札</h2>
+      <div id="player-cards" class="flex flex-wrap gap-2"></div>
     </div>
-    <div id="play-area" class="w-1/2 p-4 bg-gray-200 rounded-lg play-area">
-      <h2 class="text-xl font-semibold">プレイエリア</h2>
-      <div id="ai-field" class="flex flex-wrap gap-2 mb-2 border-b-2 border-gray-400 pb-2 drop-target"></div>
-      <div id="player-field" class="flex flex-wrap gap-2"></div>
-    </div>
-  </div>
-  <div id="player-hand" class="w-full max-w-5xl mx-auto p-4 bg-green-200 rounded-lg mt-4">
-    <h2 class="text-xl font-semibold">プレイヤーの手札</h2>
-    <div id="player-cards" class="flex flex-wrap gap-2"></div>
   </div>
   <button id="end-turn" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">ターン終了</button>
   <div id="game-result">
-    <div>
+    <div class="modal-content">
       <h2 id="result-text" class="text-2xl font-bold mb-4"></h2>
       <button id="reset-button" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">リセット</button>
     </div>
   </div>
   <div id="mulligan-screen">
-    <div>
+    <div class="modal">
       <h2 class="text-2xl font-bold mb-6">手札を選択してください</h2>
       <div id="mulligan-cards"></div>
-      <button id="mulligan-confirm" class="mt-6 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">マリガン確定</button>
+      <button id="mulligan-confirm" class="mt-8 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">マリガン確定</button>
     </div>
   </div>
   <div id="card-detail-modal">
-    <div>
+    <div class="modal">
       <span id="close-detail" class="close-button">×</span>
       <div id="card-detail-content"></div>
     </div>
   </div>
+  <div id="mode-screen" class="show">
+    <div class="modal-content">
+      <h2 class="text-3xl font-bold mb-6">対戦モード選択</h2>
+      <div class="flex gap-4">
+        <button id="ai-mode" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">AI対戦</button>
+        <button id="multiplayer-mode" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">誰かと対戦</button>
+      </div>
+    </div>
+  </div>
+  <div id="room-screen">
+    <div class="modal-content">
+      <h2 class="text-3xl font-bold mb-6">ルーム設定</h2>
+      <div class="flex flex-col items-center gap-2">
+        <input id="room-id" type="text" placeholder="ルームIDを入力" class="p-2 border rounded w-64">
+        <div class="flex gap-2">
+          <button id="create-room" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">ルーム作成</button>
+          <button id="join-room" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">ルーム参加</button>
+        </div>
+        <div id="room-status" class="text-lg mt-2"></div>
+      </div>
+    </div>
+  </div>
+  <div id="waiting-mulligan">
+    <div class="modal-content">
+      <h2 class="text-2xl font-bold mb-4">相手のマリガンを待っています...</h2>
+    </div>
+  </div>
+  <div id="waiting-match">
+    <div class="modal-content">
+      <h2 id="waiting-match-text" class="text-2xl font-bold mb-4">マッチ待機中...</h2>
+      <button id="start-game" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 hidden">ゲーム開始</button>
+    </div>
+  </div>
 
   <script>
-    // ランダムカードデータ生成
+    let playerId = Math.random().toString(36).substr(2, 9);
+    let roomId = null;
+    let isHost = false;
+    let isAiMode = false;
+    let pollingInterval = null;
+    let gameStarted = false;
+
     const classes = ["フォレストクラフト", "ソードクラフト", "ルーンクラフト", "ドラゴンクラフト", "アビスクラフト", "ハヴンクラフト", "ニュートラル"];
     const prefixes = ["マジック", "ブレイブ", "ダーク", "ホーリー", "フレイム", "シャドウ", "ミスティック", "シルバー", "ゴールデン", "クリスタル"];
     const suffixes = ["ナイト", "ドラゴン", "ウィザード", "フェアリー", "ソルジャー", "リーパー", "ビースト", "ガーディアン", "メイジ", "プリースト"];
@@ -214,72 +264,70 @@
       ...Array.from({ length: 27 }, (_, i) => {
         const cost = Math.floor(i / 3) + 1;
         let attack, health;
-        if (cost === 1) {
-          attack = Math.floor(Math.random() * 2) + 1;
-          health = Math.floor(Math.random() * 2) + 1;
-        } else if (cost === 2) {
-          attack = Math.floor(Math.random() * 2) + 2;
-          health = attack + Math.floor(Math.random() * 2) + 1;
-        } else if (cost === 3) {
-          attack = Math.floor(Math.random() * 2) + 3;
-          health = attack + Math.floor(Math.random() * 2) + 1;
-        } else {
-          attack = Math.max(1, Math.floor(cost * 1.0 + Math.random() * 3));
-          health = attack + Math.floor(Math.random() * 4) + 2;
-        }
+        if (cost === 1) { attack = Math.floor(Math.random() * 2) + 1; health = Math.floor(Math.random() * 2) + 1; }
+        else if (cost === 2) { attack = Math.floor(Math.random() * 2) + 2; health = attack + Math.floor(Math.random() * 2) + 1; }
+        else if (cost === 3) { attack = Math.floor(Math.random() * 2) + 3; health = attack + Math.floor(Math.random() * 2) + 1; }
+        else { attack = Math.max(1, Math.floor(cost * 1.0 + Math.random() * 3)); health = attack + Math.floor(Math.random() * 4); }
         const effect = effects[Math.floor(Math.random() * effects.length)];
-        return {
-          id: i + 3,
-          name: `${prefixes[Math.floor(Math.random() * prefixes.length)]}${suffixes[Math.floor(Math.random() * suffixes.length)]}`,
-          class: classes[Math.floor(Math.random() * classes.length)],
-          cost,
-          attack,
-          health,
-          effect,
-        };
+        return { id: i + 3, name: `${prefixes[Math.floor(Math.random() * prefixes.length)]}${suffixes[Math.floor(Math.random() * suffixes.length)]}`, class: classes[Math.floor(Math.random() * classes.length)], cost, attack, health, effect };
       }),
     ];
 
     let playerHand = [];
     let playerField = [];
-    let aiHand = [];
-    let aiField = [];
+    let opponentHand = [];
+    let opponentField = [];
     let playerMana = 1;
     let maxPlayerMana = 1;
-    let aiMana = 1;
-    let maxAiMana = 1;
+    let opponentMana = 1;
+    let maxOpponentMana = 1;
     let playerLife = 20;
-    let aiLife = 20;
+    let opponentLife = 20;
     let currentTurn = "player";
     let turnCount = 1;
     let gameOver = false;
     let isMulliganPhase = true;
     let selectedCards = [];
+    let mulliganDone = false;
 
-    function initializeGame() {
+    async function initializeGame() {
       try {
-        playerHand = drawCards(5);
-        aiHand = drawCards(5);
+        if (isAiMode) {
+          playerHand = drawCards(5);
+          opponentHand = drawCards(5);
+          document.getElementById("mulligan-screen").classList.add("show");
+        } else {
+          playerHand = drawCards(5);
+          opponentHand = Array(5).fill({ name: "不明", class: "-", cost: 0, attack: 0, health: 0, effect: "none" });
+          document.getElementById("mulligan-screen").classList.add("show");
+        }
         playerField = [];
-        aiField = [];
+        opponentField = [];
         playerMana = 1;
         maxPlayerMana = 1;
-        aiMana = 1;
-        maxAiMana = 1;
+        opponentMana = 1;
+        maxOpponentMana = 1;
         playerLife = 20;
-        aiLife = 20;
+        opponentLife = 20;
         turnCount = 1;
-        currentTurn = "player";
+        currentTurn = isAiMode || isHost ? "player" : "opponent";
         gameOver = false;
         isMulliganPhase = true;
+        mulliganDone = false;
         selectedCards = [];
+        gameStarted = true;
         document.getElementById("game-result").classList.remove("show");
-        document.getElementById("mulligan-screen").classList.add("show");
         document.getElementById("card-detail-modal").classList.remove("show");
+        document.getElementById("mode-screen").classList.remove("show");
+        document.getElementById("room-screen").classList.remove("show");
+        document.getElementById("waiting-mulligan").classList.remove("show");
+        document.getElementById("waiting-match").classList.remove("show");
         updateMulliganDisplay();
         updateGameStatus();
-        console.log(`ゲーム初期化 - プレイヤーマナ: ${playerMana}/${maxPlayerMana}, AIマナ: ${aiMana}/${maxAiMana}, マリガン開始`);
-        console.log("カードデータ:", JSON.stringify(cardsData, null, 2));
+        if (!isAiMode) {
+          await sendGameState();
+        }
+        updateGameDisplay();
       } catch (error) {
         console.error("ゲーム初期化エラー:", error.stack);
       }
@@ -300,7 +348,7 @@
         mulliganCardsDiv.innerHTML = "";
         playerHand.forEach((card, index) => {
           const cardElement = document.createElement("div");
-          cardElement.className = `card mulligan-card ${card.effect !== "none" ? "effect" : ""} ${selectedCards.includes(index) ? "selected" : ""} ${card.effect === "guard" ? "guard" : ""}`;
+          cardElement.className = `card ${card.effect !== "none" ? "effect" : ""} ${selectedCards.includes(index) ? "selected" : ""} ${card.effect === "guard" ? "guard" : ""}`;
           cardElement.setAttribute("data-index", index);
           cardElement.innerHTML = `
             <div class="font-bold card-name">${card.name}</div>
@@ -310,13 +358,9 @@
             <div class="tooltip" data-tooltip="${effectDescriptions[card.effect] || "効果なし"}">効果: ${card.effect || "-"}</div>
           `;
           cardElement.addEventListener("click", () => handleMulliganCardClick(index));
-          cardElement.addEventListener("contextmenu", (e) => {
-            e.preventDefault();
-            showCardDetail(index);
-          });
+          cardElement.addEventListener("contextmenu", (e) => { e.preventDefault(); showCardDetail(index); });
           mulliganCardsDiv.appendChild(cardElement);
         });
-        console.log(`マリガン表示更新 - 選択カード: ${selectedCards.length > 0 ? selectedCards.map(i => playerHand[i].name).join(", ") : "なし"}`);
       } catch (error) {
         console.error("マリガン表示エラー:", error.stack);
       }
@@ -325,10 +369,6 @@
     function showCardDetail(index) {
       try {
         const card = playerHand[index];
-        if (!card) {
-          console.log("カード詳細表示失敗: カードが見つからない", { index, playerHand });
-          return;
-        }
         const detailContent = document.getElementById("card-detail-content");
         detailContent.innerHTML = `
           <div class="font-bold text-xl mb-2">${card.name}</div>
@@ -338,20 +378,17 @@
           <div>効果: ${effectDescriptions[card.effect] || "効果なし"}</div>
         `;
         document.getElementById("card-detail-modal").classList.add("show");
-        console.log(`カード詳細表示: ${card.name}`);
       } catch (error) {
         console.error("カード詳細表示エラー:", error.stack);
       }
     }
 
-    function handleMulliganCardClick(index) {
+    async function handleMulliganCardClick(index) {
       try {
         if (selectedCards.includes(index)) {
           selectedCards = selectedCards.filter(i => i !== index);
-          console.log(`マリガン選択解除: ${playerHand[index].name}`);
         } else {
           selectedCards.push(index);
-          console.log(`マリガン選択: ${playerHand[index].name}`);
         }
         updateMulliganDisplay();
       } catch (error) {
@@ -359,20 +396,28 @@
       }
     }
 
-    function performMulligan() {
+    async function performMulligan() {
       try {
         if (selectedCards.length > 0) {
-          console.log(`マリガン実行 - 交換カード: ${selectedCards.map(i => playerHand[i].name).join(", ")}`);
           selectedCards.sort((a, b) => b - a);
           selectedCards.forEach(index => playerHand.splice(index, 1));
           playerHand.push(...drawCards(selectedCards.length));
-        } else {
-          console.log("マリガン実行 - 交換なし");
         }
-        isMulliganPhase = false;
+        mulliganDone = true;
         document.getElementById("mulligan-screen").classList.remove("show");
-        updateGameDisplay();
-        console.log("マリガン完了 - ゲーム開始");
+        if (isAiMode) {
+          isMulliganPhase = false;
+          updateGameDisplay();
+        } else {
+          await sendGameState();
+          const gameState = await fetchGameState();
+          if (!gameState || !gameState.opponentMulliganDone) {
+            document.getElementById("waiting-mulligan").classList.add("show");
+          } else {
+            isMulliganPhase = false;
+            updateGameDisplay();
+          }
+        }
       } catch (error) {
         console.error("マリガン実行エラー:", error.stack);
       }
@@ -380,39 +425,33 @@
 
     function updateGameDisplay() {
       try {
-        document.getElementById("game-status").textContent = `ターン: ${turnCount} (${currentTurn === "player" ? "プレイヤー" : "AI"})`;
+        document.getElementById("game-status").textContent = `ターン: ${turnCount} (${currentTurn === "player" ? "プレイヤー" : isAiMode ? "AI" : "相手"})`;
         document.getElementById("player-mana").textContent = `マナ: ${playerMana}/${maxPlayerMana}`;
         document.getElementById("player-life").textContent = `ライフ: ${playerLife}`;
-        document.getElementById("ai-mana").textContent = `マナ: ${aiMana}/${maxAiMana}`;
-        document.getElementById("ai-life").textContent = `ライフ: ${aiLife}`;
+        document.getElementById("opponent-mana").textContent = `マナ: ${opponentMana}/${maxOpponentMana}`;
+        document.getElementById("opponent-life").textContent = `ライフ: ${opponentLife}`;
 
         const playerCardsDiv = document.getElementById("player-cards");
         const playerFieldDiv = document.getElementById("player-field");
-        const aiFieldDiv = document.getElementById("ai-field");
+        const opponentFieldDiv = document.getElementById("opponent-field");
 
         playerCardsDiv.innerHTML = "";
-        playerFieldDiv.innerHTML = "";
-        aiFieldDiv.innerHTML = "";
-
         playerHand.forEach((card, index) => {
           const cardElement = createCardElement(card, index, "player-hand");
           playerCardsDiv.appendChild(cardElement);
         });
 
+        playerFieldDiv.innerHTML = "";
         playerField.forEach((card, index) => {
           const cardElement = createCardElement(card, index, "player-field");
           playerFieldDiv.appendChild(cardElement);
         });
 
-        aiField.forEach((card, index) => {
-          const cardElement = createCardElement(card, index, "ai-field");
-          aiFieldDiv.appendChild(cardElement);
+        opponentFieldDiv.innerHTML = "";
+        opponentField.forEach((card, index) => {
+          const cardElement = createCardElement(card, index, "opponent-field");
+          opponentFieldDiv.appendChild(cardElement);
         });
-
-        console.log(`表示更新 - プレイヤーマナ: ${playerMana}/${maxPlayerMana}, AIマナ: ${aiMana}/${maxAiMana}, ライフ - プレイヤー: ${playerLife}, AI: ${aiLife}`);
-        console.log(`プレイヤー手札:`, playerHand.map(c => c.name));
-        console.log(`プレイヤー場カード:`, playerField.map(c => ({ name: c.name, canAttack: c.canAttack, effect: c.effect })));
-        console.log(`AI場カード:`, aiField.map(c => ({ name: c.name, canAttack: c.canAttack, effect: c.effect })));
       } catch (error) {
         console.error("表示更新エラー:", error.stack);
       }
@@ -421,17 +460,17 @@
     function createCardElement(card, index, type) {
       try {
         const cardDiv = document.createElement("div");
-        cardDiv.className = `card ${card.effect !== "none" ? "effect" : ""} ${type === "player-field" && card.canAttack && currentTurn === "player" && !gameOver && !isMulliganPhase ? "attackable" : ""} ${type === "player-field" && !card.canAttack ? "attacked" : ""} ${type === "ai-field" && currentTurn === "player" && !gameOver && !isMulliganPhase ? "drop-target" : ""} ${card.effect === "guard" ? "guard" : ""}`;
+        cardDiv.className = `card ${card.effect !== "none" ? "effect" : ""} ${type === "player-field" && card.canAttack && currentTurn === "player" && !gameOver && !isMulliganPhase ? "attackable" : ""} ${type === "player-field" && !card.canAttack ? "attacked" : ""} ${type === "opponent-field" && currentTurn === "player" && !gameOver && !isMulliganPhase ? "drop-target" : ""} ${card.effect === "guard" ? "guard" : ""}`;
         cardDiv.setAttribute("data-index", index);
         cardDiv.setAttribute("data-type", type);
         if (type === "player-hand" && !isMulliganPhase || (type === "player-field" && card.canAttack && currentTurn === "player" && !gameOver && !isMulliganPhase)) {
           cardDiv.setAttribute("draggable", "true");
         }
         cardDiv.innerHTML = `
-          <div class="font-bold">${card.name}</div>
-          <div>クラス: ${card.class}</div>
-          <div>コスト: ${card.cost}</div>
-          <div>攻撃: ${card.attack} / 体力: ${card.health}</div>
+          <div class="font-bold">${card.name || "不明"}</div>
+          <div>クラス: ${card.class || "-"}</div>
+          <div>コスト: ${card.cost || 0}</div>
+          <div>攻撃: ${card.attack || 0} / 体力: ${card.health || 0}</div>
           <div class="tooltip" data-tooltip="${effectDescriptions[card.effect] || "効果なし"}">効果: ${card.effect || "-"}</div>
         `;
         if (type === "player-hand" && !isMulliganPhase || (type === "player-field" && card.canAttack && currentTurn === "player" && !gameOver && !isMulliganPhase)) {
@@ -445,17 +484,13 @@
       }
     }
 
-    function handleDragStart(event) {
+    async function handleDragStart(event) {
       try {
-        if (gameOver || isMulliganPhase) {
-          console.log(`ドラッグ開始失敗: ${gameOver ? "ゲーム終了中" : "マリガン中"}`);
-          return;
-        }
+        if (gameOver || isMulliganPhase) return;
         const index = event.target.getAttribute("data-index");
         const type = event.target.getAttribute("data-type");
         event.dataTransfer.setData("text/plain", JSON.stringify({ index: parseInt(index), type }));
         event.target.classList.add("dragging");
-        console.log(`ドラッグ開始: ${type}, インデックス: ${index}`);
       } catch (error) {
         console.error("ドラッグ開始エラー:", error.stack);
       }
@@ -464,206 +499,125 @@
     function handleDragEnd(event) {
       try {
         event.target.classList.remove("dragging");
-        console.log(`ドラッグ終了: ${event.target.getAttribute("data-type")}, インデックス: ${event.target.getAttribute("data-index")}`);
       } catch (error) {
         console.error("ドラッグ終了エラー:", error.stack);
       }
     }
 
-    function handlePlayDrop(event) {
+    async function handlePlayDrop(event) {
       try {
         event.preventDefault();
-        if (gameOver || isMulliganPhase) {
-          console.log(`プレイドロップ失敗: ${gameOver ? "ゲーム終了中" : "マリガン中"}`);
-          return;
-        }
-        if (currentTurn !== "player") {
-          console.log("プレイドロップ失敗: プレイヤーのターンではない");
-          return;
-        }
+        if (gameOver || isMulliganPhase || currentTurn !== "player") return;
         const data = JSON.parse(event.dataTransfer.getData("text/plain"));
-        if (data.type !== "player-hand") {
-          console.log("プレイドロップ失敗: 手札カードではない", { data });
-          return;
-        }
+        if (data.type !== "player-hand") return;
         const cardIndex = data.index;
         const card = playerHand[cardIndex];
-        if (!card) {
-          console.log("プレイドロップ失敗: カードが見つからない", { cardIndex, playerHand });
-          return;
-        }
-        if (playerMana < card.cost) {
-          console.log(`プレイドロップ失敗: マナ不足 (必要: ${card.cost}, 現在: ${playerMana})`);
-          return;
-        }
-        if (playerField.length >= 5) {
-          console.log("プレイドロップ失敗: プレイエリアが満杯");
-          return;
-        }
+        if (playerMana < card.cost || playerField.length >= 5) return;
         let newCard = { ...card, canAttack: card.effect === "rush" };
-        if (card.effect === "fanfare") {
-          newCard.attack += 1;
-          console.log(`ファンファーレ発動: ${card.name}, 攻撃力+1 -> ${newCard.attack}`);
-        }
+        if (card.effect === "fanfare") newCard.attack += 1;
         playerField.push(newCard);
         playerMana -= card.cost;
         playerHand.splice(cardIndex, 1);
         playerField.forEach(fieldCard => {
-          if (fieldCard && fieldCard.effect === "boost") {
-            fieldCard.health += 1;
-            console.log(`ブースト発動: ${fieldCard.name}, 体力+1 -> ${fieldCard.health}`);
-          }
+          if (fieldCard.effect === "boost") fieldCard.health += 1;
         });
         updateGameDisplay();
-        console.log(`カードプレイ: ${card.name}, 残マナ: ${playerMana}, 場カード数: ${playerField.length}`);
+        if (!isAiMode) await sendGameState();
       } catch (error) {
         console.error("プレイドロップエラー:", error.stack);
       }
     }
 
-    function handleAttackDrop(event) {
+    async function handleAttackDrop(event) {
       try {
         event.preventDefault();
-        if (gameOver || isMulliganPhase) {
-          console.log(`攻撃ドロップ失敗: ${gameOver ? "ゲーム終了中" : "マリガン中"}`);
-          return;
-        }
-        if (currentTurn !== "player") {
-          console.log("攻撃ドロップ失敗: プレイヤーのターンではない");
-          return;
-        }
+        if (gameOver || isMulliganPhase || currentTurn !== "player") return;
         const data = JSON.parse(event.dataTransfer.getData("text/plain"));
-        if (data.type !== "player-field") {
-          console.log("攻撃ドロップ失敗: 場カードではない", { data });
-          return;
-        }
+        if (data.type !== "player-field") return;
         const cardIndex = data.index;
         const attackingCard = playerField[cardIndex];
-        if (!attackingCard || !attackingCard.canAttack) {
-          console.log(`攻撃ドロップ失敗: 攻撃不可 ${attackingCard ? attackingCard.name : "不明"} (canAttack: ${attackingCard ? attackingCard.canAttack : "N/A"})`);
-          return;
-        }
+        if (!attackingCard || !attackingCard.canAttack) return;
+        const hasGuard = opponentField.some(card => card.effect === "guard");
+        const target = event.target.closest("#opponent-info") || event.target.closest(".card[data-type='opponent-field']");
+        if (!target) return;
 
-        const hasGuard = aiField.some(card => card && card.effect === "guard");
-        const target = event.target.closest("#ai-info") || event.target.closest(".card[data-type='ai-field']");
-        if (!target) {
-          console.log("攻撃ドロップ失敗: 無効なターゲット");
-          return;
-        }
-
-        if (target.id === "ai-info") {
-          if (hasGuard) {
-            console.log(`攻撃ドロップ失敗: AI場にGuardカードが存在 (${aiField.filter(c => c && c.effect === "guard").map(c => c.name).join(", ")})`);
-            return;
-          }
-          aiLife -= attackingCard.attack;
+        if (target.id === "opponent-info") {
+          if (hasGuard) return;
+          opponentLife -= attackingCard.attack;
           attackingCard.canAttack = false;
-          updateGameDisplay();
-          checkGameEnd();
-          console.log(`直接攻撃: ${attackingCard.name} -> AIライフ, ダメージ: ${attackingCard.attack}, AIライフ残: ${aiLife}`);
         } else {
-          const aiCardIndex = parseInt(target.getAttribute("data-index"));
-          const aiCard = aiField[aiCardIndex];
-          if (!aiCard) {
-            console.log("攻撃ドロップ失敗: AIカードが見つからない", { aiCardIndex, aiField });
-            return;
-          }
-          if (hasGuard && aiCard.effect !== "guard") {
-            console.log(`攻撃ドロップ失敗: Guardカードが存在するが、${aiCard.name}はGuardではない`);
-            return;
-          }
-          aiCard.health -= attackingCard.attack;
-          attackingCard.health -= aiCard.attack;
-          playerField = playerField.filter(card => card && card.health > 0);
-          aiField = aiField.filter(card => card && card.health > 0);
+          const opponentCardIndex = parseInt(target.getAttribute("data-index"));
+          const opponentCard = opponentField[opponentCardIndex];
+          if (hasGuard && opponentCard.effect !== "guard") return;
+          opponentCard.health -= attackingCard.attack;
+          attackingCard.health -= opponentCard.attack;
+          playerField = playerField.filter(card => card.health > 0);
+          opponentField = opponentField.filter(card => card.health > 0);
           attackingCard.canAttack = false;
-          updateGameDisplay();
-          checkGameEnd();
-          console.log(`カード攻撃: ${attackingCard.name} -> ${aiCard.name}, ダメージ: ${attackingCard.attack}/${aiCard.attack}`);
         }
+        updateGameDisplay();
+        if (!isAiMode) await sendGameState();
+        checkGameEnd();
       } catch (error) {
         console.error("攻撃ドロップエラー:", error.stack);
       }
     }
 
-    function handleEndTurn() {
+    async function handleEndTurn() {
       try {
-        if (gameOver || isMulliganPhase) {
-          console.log(`ターン終了失敗: ${gameOver ? "ゲーム終了中" : "マリガン中"}`);
-          return;
-        }
-        if (currentTurn !== "player") {
-          console.log("ターン終了失敗: プレイヤーのターンではない");
-          return;
-        }
-        currentTurn = "ai";
+        if (gameOver || isMulliganPhase || currentTurn !== "player") return;
+        currentTurn = isAiMode ? "ai" : "opponent";
         turnCount++;
         maxPlayerMana = Math.min(maxPlayerMana + 1, 10);
         playerHand.push(...drawCards(1));
         updateGameDisplay();
-        console.log(`プレイヤーターン終了 - ターン: ${turnCount}, マナ: ${playerMana}/${maxPlayerMana}`);
-        startAiTurn();
+        if (isAiMode) {
+          await startAiTurn();
+        } else {
+          await sendGameState();
+          await startOpponentTurn();
+        }
       } catch (error) {
         console.error("ターン終了エラー:", error.stack);
       }
     }
 
-    function startPlayerTurn() {
+    async function startOpponentTurn() {
       try {
         playerMana = maxPlayerMana;
-        playerField.forEach(card => {
-          if (card) {
-            card.canAttack = true;
-            console.log(`攻撃可能リセット: ${card.name}, canAttack: ${card.canAttack}, effect: ${card.effect}`);
-          }
-        });
+        playerField.forEach(card => card.canAttack = true);
         updateGameDisplay();
-        console.log(`プレイヤーターン開始 - マナ: ${playerMana}/${maxPlayerMana}`);
       } catch (error) {
-        console.error("プレイヤーターン開始エラー:", error.stack);
+        console.error("相手ターン開始エラー:", error.stack);
       }
     }
 
-    function startAiTurn() {
+    async function startAiTurn() {
       try {
-        console.log(`AIターン開始 - マナ: ${aiMana}/${maxAiMana}`);
-        aiMana = maxAiMana;
-        aiField.forEach(card => {
-          if (card) {
-            card.canAttack = true;
-            console.log(`AI攻撃可能リセット: ${card.name}, canAttack: ${card.canAttack}, effect: ${card.effect}`);
-          }
+        opponentMana = maxOpponentMana;
+        opponentField.forEach(card => {
+          if (card) card.canAttack = true;
         });
-        const playableCards = aiHand.filter(card => card && aiMana >= card.cost && aiField.length < 5);
+        const playableCards = opponentHand.filter(card => card && opponentMana >= card.cost && opponentField.length < 5);
         if (playableCards.length > 0) {
           const card = playableCards[Math.floor(Math.random() * playableCards.length)];
           let newCard = { ...card, canAttack: card.effect === "rush" };
-          if (card.effect === "fanfare") {
-            newCard.attack += 1;
-            console.log(`AIファンファーレ発動: ${card.name}, 攻撃力+1 -> ${newCard.attack}`);
-          }
-          aiField.push(newCard);
-          aiMana -= card.cost;
-          const cardIndex = aiHand.findIndex(c => c && c.id === card.id && c.cost === card.cost);
-          if (cardIndex !== -1) {
-            aiHand.splice(cardIndex, 1);
-          }
-          aiField.forEach(fieldCard => {
-            if (fieldCard && fieldCard.effect === "boost") {
-              fieldCard.health += 1;
-              console.log(`AIブースト発動: ${fieldCard.name}, 体力+1 -> ${fieldCard.health}`);
-            }
+          if (card.effect === "fanfare") newCard.attack += 1;
+          opponentField.push(newCard);
+          opponentMana -= card.cost;
+          const opponentCardIndex = opponentHand.findIndex(c => c && c.id === card.id && c.cost === card.cost);
+          if (opponentCardIndex !== -1) opponentHand.splice(opponentCardIndex, 1);
+          opponentField.forEach(fieldCard => {
+            if (fieldCard && fieldCard.effect === "boost") fieldCard.health += 1;
           });
-          console.log(`AIカードプレイ: ${card.name}, 残マナ: ${aiMana}, 場カード数: ${aiField.length}`);
         }
-        aiField.forEach((card, index) => {
+        opponentField.forEach((card, index) => {
           if (card && card.canAttack) {
             const hasGuard = playerField.some(c => c && c.effect === "guard");
             let targetCard;
             if (hasGuard) {
               const guardCards = playerField.filter(c => c && c.effect === "guard");
               targetCard = guardCards[Math.floor(Math.random() * guardCards.length)];
-              console.log(`AI攻撃対象制限: Guardカード (${guardCards.map(c => c.name).join(", ")})`);
             } else if (playerField.length > 0 && Math.random() > 0.5) {
               targetCard = playerField[Math.floor(Math.random() * playerField.length)];
             }
@@ -671,27 +625,25 @@
               targetCard.health -= card.attack;
               card.health -= targetCard.attack;
               card.canAttack = false;
-              console.log(`AIカード攻撃: ${card.name} -> ${targetCard.name}, ダメージ: ${card.attack}/${targetCard.attack}`);
             } else {
               playerLife -= card.attack;
               card.canAttack = false;
-              console.log(`AI直接攻撃: ${card.name} -> プレイヤーライフ, ダメージ: ${card.attack}, プレイヤーライフ残: ${playerLife}`);
             }
           }
         });
         playerField = playerField.filter(card => card && card.health > 0);
-        aiField = aiField.filter(card => card && card.health > 0);
-        aiHand.push(...drawCards(1));
-        maxAiMana = Math.min(maxAiMana + 1, 10);
+        opponentField = opponentField.filter(card => card && card.health > 0);
+        opponentHand.push(...drawCards(1));
+        maxOpponentMana = Math.min(maxOpponentMana + 1, 10);
         currentTurn = "player";
         updateGameDisplay();
         checkGameEnd();
-        startPlayerTurn();
+        await startOpponentTurn();
       } catch (error) {
         console.error("AIターンエラー:", error.stack);
         currentTurn = "player";
         updateGameDisplay();
-        startPlayerTurn();
+        await startOpponentTurn();
       }
     }
 
@@ -700,30 +652,218 @@
         if (gameOver) return;
         const resultDiv = document.getElementById("game-result");
         const resultText = document.getElementById("result-text");
-        if (playerLife <= 0 && aiLife > 0) {
+        if (playerLife <= 0 && opponentLife > 0) {
           gameOver = true;
-          resultText.textContent = "AIの勝利！";
+          resultText.textContent = isAiMode ? "AIの勝利！" : "相手の勝利！";
           resultDiv.classList.add("show");
-          console.log("ゲーム終了: AIの勝利");
-        } else if (aiLife <= 0 && playerLife > 0) {
+          if (!isAiMode) stopPolling();
+        } else if (opponentLife <= 0 && playerLife > 0) {
           gameOver = true;
           resultText.textContent = "プレイヤーの勝利！";
           resultDiv.classList.add("show");
-          console.log("ゲーム終了: プレイヤーの勝利");
-        } else if (playerLife <= 0 && aiLife <= 0) {
+          if (!isAiMode) stopPolling();
+        } else if (playerLife <= 0 && opponentLife <= 0) {
           gameOver = true;
           resultText.textContent = "引き分け！";
           resultDiv.classList.add("show");
-          console.log("ゲーム終了: 引き分け");
+          if (!isAiMode) stopPolling();
         }
       } catch (error) {
         console.error("ゲーム終了エラー:", error.stack);
       }
     }
 
+    async function sendGameState() {
+      try {
+        if (isAiMode) return;
+        const gameState = {
+          playerId,
+          roomId,
+          playerHand: isHost ? playerHand : opponentHand,
+          playerField: isHost ? playerField : opponentField,
+          opponentHand: isHost ? opponentHand : playerHand,
+          opponentField: isHost ? opponentField : playerField,
+          playerMana: isHost ? playerMana : opponentMana,
+          maxPlayerMana: isHost ? maxPlayerMana : maxOpponentMana,
+          opponentMana: isHost ? opponentMana : playerMana,
+          maxOpponentMana: isHost ? maxOpponentMana : maxPlayerMana,
+          playerLife: isHost ? playerLife : opponentLife,
+          opponentLife: isHost ? opponentLife : playerLife,
+          currentTurn: currentTurn === "player" ? (isHost ? "player" : "opponent") : (isHost ? "opponent" : "player"),
+          turnCount,
+          gameOver,
+          mulliganDone,
+          opponentMulliganDone: mulliganDone,
+          gameStarted
+        };
+        await fetch('/update_game.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(gameState)
+        });
+      } catch (error) {
+        console.error("ゲーム状態送信エラー:", error.stack);
+      }
+    }
+
+    async function fetchGameState() {
+      try {
+        if (isAiMode) return null;
+        const response = await fetch('/get_game.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId, playerId })
+        });
+        const data = await response.json();
+        if (data.success) {
+          const roomData = data.roomData;
+          if (roomData.players.length === 2 && !gameStarted) {
+            document.getElementById("waiting-match-text").textContent = "相手が参加しました！";
+            if (isHost) {
+              document.getElementById("start-game").classList.remove("hidden");
+            }
+          }
+          if (roomData.gameStarted && !gameStarted) {
+            gameStarted = true;
+            document.getElementById("waiting-match").classList.remove("show");
+            await initializeGame();
+            return null;
+          }
+          if (!roomData.gameState) return roomData;
+          const gameState = roomData.gameState;
+          if (isHost) {
+            playerHand = gameState.playerHand;
+            playerField = gameState.playerField;
+            opponentHand = gameState.opponentHand;
+            opponentField = gameState.opponentField;
+            playerMana = gameState.playerMana;
+            maxPlayerMana = gameState.maxPlayerMana;
+            opponentMana = gameState.opponentMana;
+            maxOpponentMana = gameState.maxOpponentMana;
+            playerLife = gameState.playerLife;
+            opponentLife = gameState.opponentLife;
+            currentTurn = gameState.currentTurn;
+            mulliganDone = gameState.mulliganDone;
+            opponentHand = gameState.opponentHand.map(() => ({ name: "不明", class: "-", cost: 0, attack: 0, health: 0, effect: "none" }));
+          } else {
+            playerHand = gameState.opponentHand;
+            playerField = gameState.opponentField;
+            opponentHand = gameState.playerHand;
+            opponentField = gameState.playerField;
+            playerMana = gameState.opponentMana;
+            maxPlayerMana = gameState.maxOpponentMana;
+            opponentMana = gameState.playerMana;
+            maxOpponentMana = gameState.maxPlayerMana;
+            playerLife = gameState.opponentLife;
+            opponentLife = gameState.playerLife;
+            currentTurn = gameState.currentTurn === "player" ? "opponent" : "player";
+            mulliganDone = gameState.opponentMulliganDone;
+            opponentHand = gameState.playerHand.map(() => ({ name: "不明", class: "-", cost: 0, attack: 0, health: 0, effect: "none" }));
+          }
+          turnCount = gameState.turnCount;
+          gameOver = gameState.gameOver;
+          gameStarted = gameState.gameStarted;
+          if (mulliganDone && gameState.opponentMulliganDone && isMulliganPhase) {
+            isMulliganPhase = false;
+            document.getElementById("waiting-mulligan").classList.remove("show");
+            updateGameDisplay();
+          }
+          updateGameDisplay();
+          checkGameEnd();
+          return roomData;
+        }
+      } catch (error) {
+        console.error("ゲーム状態取得エラー:", error.stack);
+      }
+      return null;
+    }
+
+    function startPolling() {
+      if (isAiMode || pollingInterval) return;
+      pollingInterval = setInterval(async () => {
+        await fetchGameState();
+      }, 1000);
+    }
+
+    function stopPolling() {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+    }
+
+    async function createRoom() {
+      try {
+        const roomIdInput = document.getElementById("room-id").value;
+        if (!roomIdInput) {
+          document.getElementById("room-status").textContent = "ルームIDを入力してください";
+          return;
+        }
+        const response = await fetch('/create_room.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: roomIdInput, playerId })
+        });
+        const result = await response.json();
+        if (result.success) {
+          roomId = roomIdInput;
+          isHost = true;
+          document.getElementById("room-status").textContent = `ルーム作成成功: ${roomId}`;
+          document.getElementById("room-screen").classList.remove("show");
+          document.getElementById("waiting-match").classList.add("show");
+          startPolling();
+        } else {
+          document.getElementById("room-status").textContent = result.message;
+        }
+      } catch (error) {
+        console.error("ルーム作成エラー:", error.stack);
+      }
+    }
+
+    async function joinRoom() {
+      try {
+        const roomIdInput = document.getElementById("room-id").value;
+        if (!roomIdInput) {
+          document.getElementById("room-status").textContent = "ルームIDを入力してください";
+          return;
+        }
+        const response = await fetch('/join_room.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: roomIdInput, playerId })
+        });
+        const result = await response.json();
+        if (result.success) {
+          roomId = roomIdInput;
+          isHost = false;
+          document.getElementById("room-status").textContent = `ルーム参加成功: ${roomId}`;
+          document.getElementById("room-screen").classList.remove("show");
+          document.getElementById("waiting-match").classList.add("show");
+          document.getElementById("waiting-match-text").textContent = "ホストがゲーム開始を待っています...";
+          startPolling();
+        } else {
+          document.getElementById("room-status").textContent = result.message;
+        }
+      } catch (error) {
+        console.error("ルーム参加エラー:", error.stack);
+      }
+    }
+
+    async function startGame() {
+      try {
+        if (!isHost) return;
+        gameStarted = true;
+        await sendGameState();
+        document.getElementById("waiting-match").classList.remove("show");
+        await initializeGame();
+      } catch (error) {
+        console.error("ゲーム開始エラー:", error.stack);
+      }
+    }
+
     function updateGameStatus() {
       try {
-        document.getElementById("game-status").textContent = `ターン: ${turnCount} (${currentTurn === "player" ? "プレイヤー" : "AI"})`;
+        document.getElementById("game-status").textContent = `ターン: ${turnCount} (${currentTurn === "player" ? "プレイヤー" : isAiMode ? "AI" : "相手"})`;
       } catch (error) {
         console.error("ゲームステータス更新エラー:", error.stack);
       }
@@ -732,62 +872,47 @@
     function setupEventListeners() {
       try {
         const playArea = document.getElementById("play-area");
-        const aiInfo = document.getElementById("ai-info");
-        const aiField = document.getElementById("ai-field");
+        const opponentInfo = document.getElementById("opponent-info");
+        const opponentField = document.getElementById("opponent-field");
         const endTurnButton = document.getElementById("end-turn");
         const resetButton = document.getElementById("reset-button");
         const mulliganConfirmButton = document.getElementById("mulligan-confirm");
         const closeDetailButton = document.getElementById("close-detail");
-
-        if (!playArea || !aiInfo || !aiField || !endTurnButton || !resetButton || !mulliganConfirmButton || !closeDetailButton) {
-          throw new Error("必要なDOM要素が見つかりません: " + JSON.stringify({
-            playArea: !!playArea,
-            aiInfo: !!aiInfo,
-            aiField: !!aiField,
-            endTurnButton: !!endTurnButton,
-            resetButton: !!resetButton,
-            mulliganConfirmButton: !!mulliganConfirmButton,
-            closeDetailButton: !!closeDetailButton
-          }, null, 2));
-        }
+        const createRoomButton = document.getElementById("create-room");
+        const joinRoomButton = document.getElementById("join-room");
+        const startGameButton = document.getElementById("start-game");
+        const aiModeButton = document.getElementById("ai-mode");
+        const multiplayerModeButton = document.getElementById("multiplayer-mode");
 
         playArea.addEventListener("dragover", event => event.preventDefault());
         playArea.addEventListener("drop", handlePlayDrop);
-        aiInfo.addEventListener("dragover", event => event.preventDefault());
-        aiInfo.addEventListener("drop", handleAttackDrop);
-        aiField.addEventListener("dragover", event => event.preventDefault());
-        aiField.addEventListener("drop", handleAttackDrop);
-
-        endTurnButton.removeEventListener("click", handleEndTurn);
+        opponentInfo.addEventListener("dragover", event => event.preventDefault());
+        opponentInfo.addEventListener("drop", handleAttackDrop);
+        opponentField.addEventListener("dragover", event => event.preventDefault());
+        opponentField.addEventListener("drop", handleAttackDrop);
         endTurnButton.addEventListener("click", handleEndTurn);
-
-        resetButton.removeEventListener("click", initializeGame);
-        resetButton.addEventListener("click", initializeGame);
-
-        mulliganConfirmButton.removeEventListener("click", performMulligan);
+        resetButton.addEventListener("click", () => { stopPolling(); initializeGame(); });
         mulliganConfirmButton.addEventListener("click", performMulligan);
-
-        closeDetailButton.removeEventListener("click", () => document.getElementById("card-detail-modal").classList.remove("show"));
-        closeDetailButton.addEventListener("click", () => {
-          document.getElementById("card-detail-modal").classList.remove("show");
-          console.log("カード詳細モーダル閉じる");
+        closeDetailButton.addEventListener("click", () => document.getElementById("card-detail-modal").classList.remove("show"));
+        createRoomButton.addEventListener("click", createRoom);
+        joinRoomButton.addEventListener("click", joinRoom);
+        startGameButton.addEventListener("click", startGame);
+        aiModeButton.addEventListener("click", () => {
+          isAiMode = true;
+          document.getElementById("mode-screen").classList.remove("show");
+          initializeGame();
         });
-
-        console.log("イベントリスナー設定完了");
+        multiplayerModeButton.addEventListener("click", () => {
+          isAiMode = false;
+          document.getElementById("mode-screen").classList.remove("show");
+          document.getElementById("room-screen").classList.add("show");
+        });
       } catch (error) {
         console.error("イベントリスナー設定エラー:", error.stack);
       }
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
-      try {
-        initializeGame();
-        setupEventListeners();
-        console.log("DOMContentLoaded: ゲーム初期化とイベントリスナー設定完了");
-      } catch (error) {
-        console.error("DOMContentLoadedエラー:", error.stack);
-      }
-    });
+    document.addEventListener("DOMContentLoaded", setupEventListeners);
   </script>
 </body>
 </html>
